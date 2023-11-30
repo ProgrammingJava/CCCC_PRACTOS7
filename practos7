@@ -1,0 +1,155 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main()
+    {
+        await ConsoleExplorer.Start();
+    }
+}
+
+static class ConsoleExplorer
+{
+    private static string currentPath;
+    private static int selectedIndex;
+    private static int maxIndex;
+
+    public static async Task Start()
+    {
+        DriveInfo[] drives = DriveInfo.GetDrives();
+
+        Console.CursorVisible = false;
+        ConsoleKeyInfo key;
+
+        do
+        {
+            Console.Clear();
+            Console.WriteLine("Выберите диск:");
+
+            for (int i = 0; i < drives.Length; i++)
+            {
+                Console.WriteLine($"{i + 1}. {drives[i].Name} - {drives[i].AvailableFreeSpace / (1024 * 1024 * 1024)} GB свободно");
+            }
+
+            key = Console.ReadKey();
+
+            if (key.Key == ConsoleKey.Escape)
+            {
+                Environment.Exit(0);
+            }
+
+            int selectedDriveIndex = int.Parse(key.KeyChar.ToString()) - 1;
+
+            if (selectedDriveIndex >= 0 && selectedDriveIndex < drives.Length)
+            {
+                currentPath = drives[selectedDriveIndex].RootDirectory.FullName;
+                selectedIndex = 0;
+                await ExploreDirectory(false);
+            }
+
+        } while (true);
+    }
+
+    private static async Task ExploreDirectory(bool isFileSelected)
+    {
+        ConsoleKeyInfo key;
+
+        do
+        {
+            Console.Clear();
+            Console.WriteLine($"Текущая директория: {currentPath}");
+
+            string[] directories = Directory.GetDirectories(currentPath);
+            string[] files = Directory.GetFiles(currentPath);
+
+            maxIndex = directories.Length + files.Length;
+
+            for (int i = 0; i < directories.Length; i++)
+            {
+                PrintItem(i, $"[Папка] {Path.GetFileName(directories[i])}");
+            }
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                PrintItem(i + directories.Length, $"[Файл] {Path.GetFileName(files[i])}");
+            }
+
+            key = Console.ReadKey(true); // true для предотвращения отображения введенного символа
+
+            if (key.Key == ConsoleKey.Escape)
+            {
+                if (!isFileSelected && currentPath != null && currentPath.Length > 3)
+                {
+                    currentPath = Directory.GetParent(currentPath).FullName;
+                    selectedIndex = 0;
+                }
+                else
+                {
+                    return;
+                }
+            }
+            else if (key.Key == ConsoleKey.DownArrow)
+            {
+                selectedIndex = (selectedIndex + 1) % maxIndex;
+                await Task.Delay(200); // Задержка 200 миллисекунд
+            }
+            else if (key.Key == ConsoleKey.UpArrow)
+            {
+                selectedIndex = (selectedIndex - 1 + maxIndex) % maxIndex;
+                await Task.Delay(200);
+            }
+            else if (key.Key == ConsoleKey.Enter)
+            {
+                if (selectedIndex < directories.Length)
+                {
+                    currentPath = directories[selectedIndex];
+                    selectedIndex = 0;
+                }
+                else if (selectedIndex >= directories.Length && selectedIndex < maxIndex)
+                {
+                    OpenFile(files[selectedIndex - directories.Length]);
+                }
+            }
+
+        } while (true);
+    }
+
+    private static void PrintItem(int index, string text)
+    {
+        if (index == selectedIndex)
+        {
+            Console.BackgroundColor = ConsoleColor.Gray;
+            Console.ForegroundColor = ConsoleColor.Black;
+        }
+
+        Console.WriteLine($"{index + 1}. {text}");
+
+        Console.ResetColor();
+    }
+
+    private static void OpenFile(string filePath)
+    {
+        Console.Clear();
+        Console.WriteLine($"Открытие файла: {filePath}");
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/C start \"\" \"{filePath}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при открытии файла: {ex.Message}");
+        }
+
+        Console.ReadKey();
+    }
+}
